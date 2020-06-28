@@ -23,6 +23,9 @@ class Venue(db.Model):
     website = db.Column(db.String(120))
     shows = db.relationship('Show', backref='venue', lazy=True)
 
+    def __repr__(self):
+        return f'<Venue {self.id} {self.name}>'
+
     def get_venue(self):
         venue = {
             "id": self.id,
@@ -63,6 +66,9 @@ class Artist(db.Model):
     seeking_description = db.Column(db.String())
     shows = db.relationship('Show', backref='artist', lazy=True)
 
+    def __repr__(self):
+        return f'<Venue {self.id} {self.name}>'
+
     def get_upcoming_shows_count(self):
         now = datetime.datetime.now()
         upcoming_shows_query = db.session.query(Show) \
@@ -87,3 +93,6 @@ class Show(db.Model):
     venue_id = db.Column(db.Integer, db.ForeignKey('Venue.id'), nullable=False)
     artist_id = db.Column(db.Integer, db.ForeignKey('Artist.id'), nullable=False)
     start_time = db.Column(db.DateTime())
+
+    def __repr__(self):
+        return f'<Venue {self.id}>'
