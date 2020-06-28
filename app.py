@@ -14,6 +14,8 @@ from flask_wtf import Form
 from forms import *
 from flask_migrate import Migrate
 
+import models
+
 # ----------------------------------------------------------------------------#
 # App Config.
 # ----------------------------------------------------------------------------#
@@ -25,55 +27,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 migrate = Migrate(app, db)
-
-
-# ----------------------------------------------------------------------------#
-# Models.
-# ----------------------------------------------------------------------------#
-
-
-class Venue(db.Model):
-    __tablename__ = 'Venue'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    address = db.Column(db.String(120))
-    phone = db.Column(db.String(120))
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
-    genres = db.Column(db.ARRAY(db.String))
-    seeking_talent = db.Column(db.Boolean)
-    seeking_description = db.Column(db.String())
-    website = db.Column(db.String(120))
-    shows = db.relationship('Show', backref='venue', lazy=True)
-
-
-class Artist(db.Model):
-    __tablename__ = 'Artist'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    phone = db.Column(db.String(120))
-    genres = db.Column(db.ARRAY(db.String))
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
-    website = db.Column(db.String(120))
-    seeking_venue = db.Column(db.Boolean)
-    seeking_description = db.Column(db.String())
-    shows = db.relationship('Show', backref='artist', lazy=True)
-
-
-class Show(db.Model):
-    __tablename__ = 'Show'
-
-    id = db.Column(db.Integer, primary_key=True)
-    venue_id = db.Column(db.Integer, db.ForeignKey('Venue.id'), nullable=False)
-    artist_id = db.Column(db.Integer, db.ForeignKey('Artist.id'), nullable=False)
-    start_time = db.Column(db.DateTime())
 
 
 # ----------------------------------------------------------------------------#
@@ -109,25 +62,18 @@ def venues():
     # TODO: replace with real venues data.
     #       num_shows should be aggregated based on number of upcoming shows per venue.
 
-    # upcoming_shows_query = db.session.query(Show, Artist) \
-    #     .filter(Show.venue_id == venue.id) \
-    #     .filter(Show.start_time > now) \
-    #     .filter(Artist.id == Show.artist_id) \
-    #     .all()
-    #
-    # for s, a in upcoming_shows_query:
-    #     upcoming_shows.extend([{
-    #         "artist_id": a.id,
-    #         "artist_name": a.name,
-    #         "artist_image_link": a.image_link,
-    #         "start_time": s.start_time.strftime("%m/%d/%Y, %H:%M")
-    #     }])
+    areas = models.Venue.query.distinct('city', 'state').all()
 
     data = []
 
-    unique_city_states = Venue.query.distinct(Venue.city, Venue.state).all()
-
-    print(unique_city_states)
+    for area in areas:
+        venues = models.Venue.query.filter(models.Venue.city == area.city, models.Venue.state == area.state).all()
+        record = {
+            'city': area.city,
+            'state': area.state,
+            'venues': [venue.get_venue() for venue in venues],
+        }
+        data.append(record)
 
     #for ucs in unique_city_states:
 
@@ -181,12 +127,12 @@ def show_venue(venue_id):
     upcoming_shows = []
     now = datetime.now()
 
-    venue = Venue.query.filter_by(id=venue_id).first_or_404()
+    venue = models.Venue.query.filter_by(id=venue_id).first_or_404()
 
-    past_shows_query = db.session.query(Show, Artist) \
-        .filter(Show.venue_id == venue.id) \
-        .filter(Show.start_time < now) \
-        .filter(Artist.id == Show.artist_id) \
+    past_shows_query = db.session.query(models.Show, models.Artist) \
+        .filter(models.Show.venue_id == venue.id) \
+        .filter(models.Show.start_time < now) \
+        .filter(models.Artist.id == models.Show.artist_id) \
         .all()
 
     for s, a in past_shows_query:
@@ -197,10 +143,10 @@ def show_venue(venue_id):
             "start_time": s.start_time.strftime("%m/%d/%Y, %H:%M")
         }])
 
-    upcoming_shows_query = db.session.query(Show, Artist) \
-        .filter(Show.venue_id == venue.id) \
-        .filter(Show.start_time > now) \
-        .filter(Artist.id == Show.artist_id) \
+    upcoming_shows_query = db.session.query(models.Show, models.Artist) \
+        .filter(models.Show.venue_id == venue.id) \
+        .filter(models.Show.start_time > now) \
+        .filter(models.Artist.id == models.Show.artist_id) \
         .all()
 
     for s, a in upcoming_shows_query:
@@ -226,8 +172,8 @@ def show_venue(venue_id):
         "image_link": venue.image_link,
         "past_shows": past_shows,
         "upcoming_shows": upcoming_shows,
-        "past_shows_count": len(past_shows),
-        "upcoming_shows_count": len(upcoming_shows),
+        "past_shows_count": venue.get_past_shows_count(),
+        "upcoming_shows_count": venue.get_upcoming_shows_count(),
     }
 
     return render_template('pages/show_venue.html', venue=data)
@@ -269,7 +215,7 @@ def delete_venue(venue_id):
 #  ----------------------------------------------------------------
 @app.route('/artists')
 def artists():
-    data = Artist.query.order_by('id').all()
+    data = models.Artist.query.order_by('id').all()
     return render_template('pages/artists.html', artists=data)
 
 
@@ -298,12 +244,12 @@ def show_artist(artist_id):
     upcoming_shows = []
     now = datetime.now()
 
-    artist = Artist.query.filter_by(id=artist_id).first_or_404()
+    artist = models.Artist.query.filter_by(id=artist_id).first_or_404()
 
-    past_shows_query = db.session.query(Show, Venue) \
-        .filter(Show.artist_id == artist.id) \
-        .filter(Show.start_time < now) \
-        .filter(Venue.id == Show.venue_id) \
+    past_shows_query = db.session.query(models.Show, models.Venue) \
+        .filter(models.Show.artist_id == artist.id) \
+        .filter(models.Show.start_time < now) \
+        .filter(models.Venue.id == models.Show.venue_id) \
         .all()
 
     for s, v in past_shows_query:
@@ -314,10 +260,10 @@ def show_artist(artist_id):
             "start_time": s.start_time.strftime("%m/%d/%Y, %H:%M")
         }])
 
-    upcoming_shows_query = db.session.query(Show, Venue) \
-        .filter(Show.artist_id == artist.id) \
-        .filter(Show.start_time > now) \
-        .filter(Venue.id == Show.venue_id) \
+    upcoming_shows_query = db.session.query(models.Show, models.Venue) \
+        .filter(models.Show.artist_id == artist.id) \
+        .filter(models.Show.start_time > now) \
+        .filter(models.Venue.id == models.Show.venue_id) \
         .all()
 
     for s, v in upcoming_shows_query:
@@ -342,8 +288,8 @@ def show_artist(artist_id):
         "image_link": artist.image_link,
         "past_shows": past_shows,
         "upcoming_shows": upcoming_shows,
-        "past_shows_count": len(past_shows),
-        "upcoming_shows_count": len(upcoming_shows)
+        "past_shows_count": artist.get_past_shows_count(),
+        "upcoming_shows_count": artist.get_upcoming_shows_count(),
     }
 
     return render_template('pages/show_artist.html', artist=data)
@@ -439,10 +385,10 @@ def shows():
     #       num_shows should be aggregated based on number of upcoming shows per venue.
     data = []
 
-    shows = db.session.query(Show, Venue, Artist) \
-        .filter(Show.venue_id == Venue.id) \
-        .filter(Show.artist_id == Artist.id) \
-        .order_by(Show.start_time.desc()) \
+    shows = db.session.query(models.Show, models.Venue, models.Artist) \
+        .filter(models.Show.venue_id == models.Venue.id) \
+        .filter(models.Show.artist_id == models.Artist.id) \
+        .order_by(models.Show.start_time.desc()) \
         .all()
 
     for s, v, a in shows:
