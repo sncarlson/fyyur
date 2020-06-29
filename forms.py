@@ -43,6 +43,7 @@ def validate_genres(form, genres):
 
 def validate_phone(form, field):
     if not re.search(r"^[0-9]{3}-[0-9]{3}-[0-9]{4}$", field.data):
+        raise ValidationError("Invalid phone number.")
 
 
 def validate_facebook_link(form, field):

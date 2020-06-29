@@ -3,7 +3,11 @@
 # ----------------------------------------------------------------------------#
 import datetime
 
+from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
+
 from app import db
+
 
 
 class Venue(db.Model):
@@ -21,7 +25,7 @@ class Venue(db.Model):
     seeking_talent = db.Column(db.Boolean)
     seeking_description = db.Column(db.String())
     website = db.Column(db.String(120))
-    shows = db.relationship('Show', backref='venue', lazy=True)
+    shows = db.relationship('Show', backref='venue', lazy=True, cascade="all, delete")
 
     def __repr__(self):
         return f'<Venue {self.id} {self.name}>'
@@ -50,6 +54,15 @@ class Venue(db.Model):
             .all()
         return len(upcoming_shows_query)
 
+    @property
+    def search(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            "num_upcoming_shows": self.get_upcoming_shows_count()
+        }
+
+
 class Artist(db.Model):
     __tablename__ = 'Artist'
 
@@ -64,7 +77,7 @@ class Artist(db.Model):
     website = db.Column(db.String(120))
     seeking_venue = db.Column(db.Boolean)
     seeking_description = db.Column(db.String())
-    shows = db.relationship('Show', backref='artist', lazy=True)
+    shows = db.relationship('Show', backref='artist', lazy=True, passive_deletes=True)
 
     def __repr__(self):
         return f'<Venue {self.id} {self.name}>'
@@ -84,6 +97,14 @@ class Artist(db.Model):
             .filter(Show.start_time < now) \
             .all()
         return len(upcoming_shows_query)
+
+    @property
+    def search(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            "num_upcoming_shows": self.get_upcoming_shows_count()
+        }
 
 
 class Show(db.Model):

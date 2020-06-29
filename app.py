@@ -5,7 +5,7 @@
 import json
 import dateutil.parser
 import babel
-from flask import Flask, render_template, request, Response, flash, redirect, url_for, abort
+from flask import Flask, render_template, request, Response, flash, redirect, url_for, abort, jsonify
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 import logging
@@ -15,7 +15,7 @@ from forms import *
 from flask_migrate import Migrate
 
 import sys
-import models
+#from models import Artist, Venue, Show
 
 # ----------------------------------------------------------------------------#
 # App Config.
@@ -25,8 +25,8 @@ app = Flask(__name__)
 moment = Moment(app)
 app.config.from_object('config')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
 
+db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
 
@@ -60,15 +60,17 @@ def index():
 
 @app.route('/venues')
 def venues():
+    from models import Venue
+
     # Done: replace with real venues data.
     #       num_shows should be aggregated based on number of upcoming shows per venue.
 
-    areas = models.Venue.query.distinct('city', 'state').all()
+    areas = Venue.query.distinct('city', 'state').all()
 
     data = []
 
     for area in areas:
-        venues = models.Venue.query.filter(models.Venue.city == area.city, models.Venue.state == area.state).all()
+        venues = Venue.query.filter(Venue.city == area.city, Venue.state == area.state).all()
         record = {
             'city': area.city,
             'state': area.state,
@@ -82,23 +84,30 @@ def venues():
 
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
-    # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
+    from models import Venue
+    # Done: implement search on artists with partial string search. Ensure it is case-insensitive.
     # seach for Hop should return "The Musical Hop".
     # search for "Music" should return "The Musical Hop" and "Park Square Live Music & Coffee"
+
+    search = request.form.get('search_term', '')
+    venues = Venue.query.filter(Venue.name.ilike("%" + search + "%")).all()
+
+    data = []
+    for venue in venues:
+        data.append(venue.search)
+
     response = {
-        "count": 1,
-        "data": [{
-            "id": 2,
-            "name": "The Dueling Pianos Bar",
-            "num_upcoming_shows": 0,
-        }]
+        "count": len(venues),
+        "data": data
     }
+
     return render_template('pages/search_venues.html', results=response,
                            search_term=request.form.get('search_term', ''))
 
 
 @app.route('/venues/<int:venue_id>')
 def show_venue(venue_id):
+    from models import Artist, Venue, Show, db
     # shows the venue page with the given venue_id
     # Done: replace with real venue data from the venues table, using venue_id
 
@@ -106,12 +115,12 @@ def show_venue(venue_id):
     upcoming_shows = []
     now = datetime.now()
 
-    venue = models.Venue.query.filter_by(id=venue_id).first_or_404()
+    venue = Venue.query.filter_by(id=venue_id).first_or_404()
 
-    past_shows_query = db.session.query(models.Show, models.Artist) \
-        .filter(models.Show.venue_id == venue.id) \
-        .filter(models.Show.start_time < now) \
-        .filter(models.Artist.id == models.Show.artist_id) \
+    past_shows_query = db.session.query(Show, Artist) \
+        .filter(Show.venue_id == venue.id) \
+        .filter(Show.start_time < now) \
+        .filter(Artist.id == Show.artist_id) \
         .all()
 
     for s, a in past_shows_query:
@@ -122,10 +131,10 @@ def show_venue(venue_id):
             "start_time": s.start_time.strftime("%m/%d/%Y, %H:%M")
         }])
 
-    upcoming_shows_query = db.session.query(models.Show, models.Artist) \
-        .filter(models.Show.venue_id == venue.id) \
-        .filter(models.Show.start_time > now) \
-        .filter(models.Artist.id == models.Show.artist_id) \
+    upcoming_shows_query = db.session.query(Show, Artist) \
+        .filter(Show.venue_id == venue.id) \
+        .filter(Show.start_time > now) \
+        .filter(Artist.id == Show.artist_id) \
         .all()
 
     for s, a in upcoming_shows_query:
@@ -169,13 +178,14 @@ def create_venue_form():
 
 @app.route('/venues/create', methods=['POST'])
 def create_venue_submission():
+    from models import Venue, db
     # Done: insert form data as a new Venue record in the db, instead
     # Done: modify data to be the data object returned from db insertion
     error = False
     form = VenueForm(request.form, meta={'csrf': False})
     if form.validate():
         try:
-            venue = models.Venue(
+            venue = Venue(
                 name=form.name.data,
                 city=form.city.data,
                 state=form.state.data,
@@ -213,53 +223,79 @@ def create_venue_submission():
 
 @app.route('/venues/<venue_id>', methods=['DELETE'])
 def delete_venue(venue_id):
-    # TODO: Complete this endpoint for taking a venue_id, and using
+    from models import Venue, db
+    # Done: Complete this endpoint for taking a venue_id, and using
     # SQLAlchemy ORM to delete a record. Handle cases where the session commit could fail.
+
+    error = False
+    try:
+        Venue.query.filter_by(id=venue_id).delete()
+        db.session.commit()
+    except:
+        error = True
+        db.session.rollback()
+        print(sys.exc_info())
+    finally:
+        db.session.close()
+
+    if error:
+        print("Venue deletion error")
+
+
 
     # BONUS CHALLENGE: Implement a button to delete a Venue on a Venue Page, have it so that
     # clicking that button delete it from the db then redirect the user to the homepage
-    return None
+    return jsonify({'success': True})
 
 
 #  Artists
 #  ----------------------------------------------------------------
 @app.route('/artists')
 def artists():
-    data = models.Artist.query.order_by('id').all()
+    from models import Artist
+
+    data = Artist.query.order_by('id').all()
     return render_template('pages/artists.html', artists=data)
 
 
 @app.route('/artists/search', methods=['POST'])
 def search_artists():
-    # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
+    from models import Artist
+    # Done: implement search on artists with partial string search. Ensure it is case-insensitive.
     # seach for "A" should return "Guns N Petals", "Matt Quevado", and "The Wild Sax Band".
     # search for "band" should return "The Wild Sax Band".
+
+    search = request.form.get('search_term', '')
+    artists = Artist.query.filter(Artist.name.ilike("%" + search + "%")).all()
+
+    data = []
+    for artist in artists:
+        data.append(artist.search)
+
     response = {
-        "count": 1,
-        "data": [{
-            "id": 4,
-            "name": "Guns N Petals",
-            "num_upcoming_shows": 0,
-        }]
+        "count": len(artists),
+        "data": data
     }
+
     return render_template('pages/search_artists.html', results=response,
                            search_term=request.form.get('search_term', ''))
 
 
 @app.route('/artists/<int:artist_id>')
 def show_artist(artist_id):
+    from models import Artist, Venue, Show, db
     # shows the venue page with the given venue_id
     # Done: replace with real venue data from the venues table, using venue_id
     past_shows = []
     upcoming_shows = []
     now = datetime.now()
 
-    artist = models.Artist.query.filter_by(id=artist_id).first_or_404()
+    artist = Artist.query.filter_by(id=artist_id).first_or_404()
 
-    past_shows_query = db.session.query(models.Show, models.Venue) \
-        .filter(models.Show.artist_id == artist.id) \
-        .filter(models.Show.start_time < now) \
-        .filter(models.Venue.id == models.Show.venue_id) \
+    past_shows_query = db.session.query(Show, Venue) \
+        .filter(Show.artist_id == artist.id) \
+        .filter(Show.start_time < now) \
+        .filter(Venue.id == Show.venue_id) \
         .all()
 
     for s, v in past_shows_query:
@@ -270,10 +306,10 @@ def show_artist(artist_id):
             "start_time": s.start_time.strftime("%m/%d/%Y, %H:%M")
         }])
 
-    upcoming_shows_query = db.session.query(models.Show, models.Venue) \
-        .filter(models.Show.artist_id == artist.id) \
-        .filter(models.Show.start_time > now) \
-        .filter(models.Venue.id == models.Show.venue_id) \
+    upcoming_shows_query = db.session.query(Show, Venue) \
+        .filter(Show.artist_id == artist.id) \
+        .filter(Show.start_time > now) \
+        .filter(Venue.id == Show.venue_id) \
         .all()
 
     for s, v in upcoming_shows_query:
@@ -374,6 +410,7 @@ def create_artist_form():
 
 @app.route('/artists/create', methods=['POST'])
 def create_artist_submission():
+    from models import Artist, db
     # called upon submitting the new artist listing form
     # Done: insert form data as a new Venue record in the db, instead
     # Done: modify data to be the data object returned from db insertion
@@ -382,7 +419,7 @@ def create_artist_submission():
     form = ArtistForm(request.form, meta={'csrf': False})
     if form.validate():
         try:
-            artist = models.Artist(
+            artist = Artist(
                 name=form.name.data,
                 city=form.city.data,
                 state=form.state.data,
@@ -426,15 +463,16 @@ def create_artist_submission():
 
 @app.route('/shows')
 def shows():
+    from models import Artist, Venue, Show,db
     # displays list of shows at /shows
     # Done: replace with real venues data.
     #       num_shows should be aggregated based on number of upcoming shows per venue.
     data = []
 
-    shows = db.session.query(models.Show, models.Venue, models.Artist) \
-        .filter(models.Show.venue_id == models.Venue.id) \
-        .filter(models.Show.artist_id == models.Artist.id) \
-        .order_by(models.Show.start_time.desc()) \
+    shows = db.session.query(Show, Venue, Artist) \
+        .filter(Show.venue_id == Venue.id) \
+        .filter(Show.artist_id == Artist.id) \
+        .order_by(Show.start_time.desc()) \
         .all()
 
     for s, v, a in shows:
@@ -459,13 +497,14 @@ def create_shows():
 
 @app.route('/shows/create', methods=['POST'])
 def create_show_submission():
+    from models import Show, db
     # called to create new shows in the db, upon submitting new show listing form
     # Done: insert form data as a new Show record in the db, instead
     error = False
     form = ShowForm(request.form, meta={'csrf': False})
     if form.validate():
         try:
-            show = models.Show()
+            show = Show()
             show.artist_id = form.artist_id.data,
             show.venue_id = form.venue_id.data,
             show.start_time = form.start_time.data
