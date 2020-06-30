@@ -537,6 +537,7 @@ def create_artist_submission():
 #  Shows
 #  ----------------------------------------------------------------
 
+
 @app.route('/shows')
 def shows():
     from models import Artist, Venue, Show, db
