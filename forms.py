@@ -2,7 +2,7 @@ import enum
 import re
 from datetime import datetime
 from flask_wtf import Form
-from wtforms import StringField, SelectField, SelectMultipleField, DateTimeField
+from wtforms import StringField, SelectField, SelectMultipleField, DateTimeField, BooleanField
 from wtforms.validators import DataRequired, AnyOf, URL, Regexp, ValidationError
 
 
@@ -32,7 +32,7 @@ class Genre(enum.Enum):
 
     @classmethod
     def generate_options(cls):
-        return [(name, name) for name, member in cls.__members__.items()]
+        return [(name, member) for name, member in cls.__members__.items()]
 
 
 def validate_genres(form, genres):
@@ -138,7 +138,7 @@ class VenueForm(Form):
         'phone', validators=[DataRequired(), validate_phone]
     )
     image_link = StringField(
-        'image_link'
+        'image_link', validators=[URL()]
     )
     genres = SelectMultipleField(
         # Done implement enum restriction
@@ -147,6 +147,20 @@ class VenueForm(Form):
     )
     facebook_link = StringField(
         'facebook_link', validators=[validate_facebook_link]
+    )
+
+    website = StringField(
+        # Done implement enum restriction
+        'website', validators=[URL()]
+    )
+
+    seeking_talent = BooleanField(
+        # Done implement enum restriction
+        'seeking_talent', validators=[]
+    )
+
+    seeking_description = StringField(
+        'seeking_description', validators=[]
     )
 
 
@@ -218,7 +232,7 @@ class ArtistForm(Form):
         'phone', validators=[validate_phone]
     )
     image_link = StringField(
-        'image_link'
+        'image_link', validators=[URL()]
     )
     genres = SelectMultipleField(
         # Done implement enum restriction
@@ -228,6 +242,20 @@ class ArtistForm(Form):
     facebook_link = StringField(
         # Done implement enum restriction
         'facebook_link', validators=[validate_facebook_link]
+    )
+
+    website = StringField(
+        # Done implement enum restriction
+        'website', validators=[URL()]
+    )
+
+    seeking_venue = BooleanField(
+        # Done implement enum restriction
+        'seeking_venue', validators=[]
+    )
+
+    seeking_description = StringField(
+        'seeking_description', validators=[]
     )
 
 # Done IMPLEMENT NEW ARTIST FORM AND NEW SHOW FORM
